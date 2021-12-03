@@ -26,7 +26,7 @@ func TestLex(t *testing.T) {
 		{
 			name:     "after white space characters",
 			input:    " \t\r\n(",
-			expected: []*token{lParenAt(4)},
+			expected: []*token{lParenAt(2, 1, 4)},
 		},
 		{
 			name:  "only line comment - EOL before EOF",
@@ -39,7 +39,7 @@ func TestLex(t *testing.T) {
 		{
 			name:     "after line comment",
 			input:    ";; TODO\n(",
-			expected: []*token{lParenAt(8)},
+			expected: []*token{lParenAt(2, 1, 8)},
 		},
 		{
 			name:  "only block comment - EOL before EOF",
@@ -52,12 +52,12 @@ func TestLex(t *testing.T) {
 		{
 			name:     "after block comment",
 			input:    "(; TODO ;)(",
-			expected: []*token{lParenAt(10)},
+			expected: []*token{lParenAt(1, 11, 10)},
 		},
 		{
 			name:        "unbalanced block comment",
 			input:       "(; TODO",
-			expectedErr: errors.New("expected block comment end ';)' at position 6"),
+			expectedErr: errors.New("1:7 expected block comment end ';)'"),
 		},
 
 		{
@@ -71,17 +71,17 @@ func TestLex(t *testing.T) {
 		{
 			name:     "after nested block comment",
 			input:    "(; TODO (; (YOLO) ;) ;)(",
-			expected: []*token{lParenAt(23)},
+			expected: []*token{lParenAt(1, 24, 23)},
 		},
 		{
 			name:        "unbalanced nested block comment",
 			input:       "(; TODO (; (YOLO) ;)",
-			expectedErr: errors.New("expected block comment end ';)' at position 20"),
+			expectedErr: errors.New("1:20 expected block comment end ';)'"),
 		},
 		{
 			name:     "white space between parens",
 			input:    "( )",
-			expected: []*token{lParenAt(0), rParenAt(2)},
+			expected: []*token{lParenAt(1, 1, 0), rParenAt(1, 3, 2)},
 		},
 	}
 
@@ -89,16 +89,16 @@ func TestLex(t *testing.T) {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
 			var tokens []*token
-			e := lex([]byte(tc.input), func(source []byte, tok tokenType, beginPos, endPos int) error {
+			e := lex([]byte(tc.input), func(source []byte, tok tokenType, line, col, pos, _ int) error {
 				switch tok {
 				case tokenLParen:
-					tokens = append(tokens, lParenAt(beginPos))
+					tokens = append(tokens, lParenAt(line, col, pos))
 					return nil
 				case tokenRParen:
-					tokens = append(tokens, rParenAt(beginPos))
+					tokens = append(tokens, rParenAt(line, col, pos))
 					return nil
 				}
-				return fmt.Errorf("unsupported token: %s at position %d", tok, beginPos)
+				return fmt.Errorf("%d:%d unsupported token: %s at position %d", line, col, tok, pos)
 			})
 			if tc.expectedErr != nil {
 				require.Equal(t, e, tc.expectedErr)
@@ -110,28 +110,24 @@ func TestLex(t *testing.T) {
 	}
 }
 
-func lParenAt(pos int) *token {
-	return newToken(tokenLParen, pos, "")
+func lParenAt(line, col, pos int) *token {
+	return &token{tokenLParen, line, col, pos, ""}
 }
 
-func rParenAt(pos int) *token {
-	return newToken(tokenRParen, pos, "")
-}
-
-func newToken(tokenType tokenType, beginPos int, val string) *token {
-	return &token{tokenType, beginPos, val}
+func rParenAt(line, col, pos int) *token {
+	return &token{tokenRParen, line, col, pos, ""}
 }
 
 type token struct {
 	tokenType
-	beginPos int
-	value    string
+	line, col, pos int
+	value          string
 }
 
 // String is here to allow tests to be easier to troubleshoot
 func (t *token) String() string {
 	if t.value == "" {
-		return fmt.Sprintf("%s at position %d", t.tokenType, t.beginPos)
+		return fmt.Sprintf("%d:%d %s at position %d", t.line, t.col, t.tokenType, t.pos)
 	}
-	return fmt.Sprintf("%s(%s) at position %d", t.tokenType, t.value, t.beginPos)
+	return fmt.Sprintf("%d:%d %s(%s) at position %d", t.line, t.col, t.tokenType, t.value, t.pos)
 }
