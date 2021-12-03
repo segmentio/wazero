@@ -5,11 +5,6 @@ package wat
 type tokenType byte
 
 const (
-	// tokenIllegal represents an error parsing
-	tokenIllegal tokenType = iota
-	// tokenEOF represents the end of the token stream
-	tokenEOF
-
 	// tokenKeyword is a sequence of asciiTypeId characters prefixed by a lowercase letter.
 	//
 	// For example, in the below, 'local.get' 'i32.const' and 'i32.lt_s' are keywords:
@@ -18,7 +13,7 @@ const (
 	//		i32.lt_s
 	//
 	// See https://www.w3.org/TR/wasm-core-1/#text-keyword
-	tokenKeyword
+	tokenKeyword tokenType = iota
 
 	// tokenUN is an unsigned integer in decimal or hexadecimal notation, optionally separated by underscores.
 	//
@@ -96,8 +91,6 @@ const (
 
 // tokenNames is index-coordinated with tokenType
 var tokenNames = []string{
-	"<illegal>",
-	"EOF",
 	"keyword",
 	"uN",
 	"sN",

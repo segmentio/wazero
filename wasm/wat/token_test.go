@@ -1,8 +1,9 @@
 package wat
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTokenType_String(t *testing.T) {
@@ -10,8 +11,6 @@ func TestTokenType_String(t *testing.T) {
 		input    tokenType
 		expected string
 	}{
-		{tokenIllegal, "<illegal>"},
-		{tokenEOF, "EOF"},
 		{tokenKeyword, "keyword"},
 		{tokenUN, "uN"},
 		{tokenSN, "sN"},
