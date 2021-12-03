@@ -69,7 +69,9 @@ func lex(source []byte, parser parseToken) error {
 			p = p + 1 // consume (
 			col = col + 1
 
-			blockCommentLevel = blockCommentLevel + 1
+			if !inLineComment {
+				blockCommentLevel = blockCommentLevel + 1
+			}
 			continue
 		}
 
@@ -77,7 +79,9 @@ func lex(source []byte, parser parseToken) error {
 			p = p + 1 // consume )
 			col = col + 1
 
-			blockCommentLevel = blockCommentLevel - 1
+			if !inLineComment {
+				blockCommentLevel = blockCommentLevel - 1
+			}
 			continue
 		}
 
@@ -93,12 +97,8 @@ func lex(source []byte, parser parseToken) error {
 			continue // skip validation as comments can contain line comments or any UTF-8
 		}
 
-		// no more whitespace: start tokenization
-		var b3 byte
-		if p+2 < length {
-			b3 = source[p+2]
-		}
-		peekEOFOrWs := b2 == 0 || b2 == ' ' || b2 == '\t' || eolSkip(b2, b3) > 0
+		// no more whitespace: start tokenization!
+		peekEOFOrWs := b2 == 0 || b2 == ' ' || b2 == '\t' || b2 == '\r' || b2 == '\n'
 		switch {
 		case b1 == '(' && peekEOFOrWs:
 			if e := parser(source, tokenLParen, line, col, p, p); e != nil {

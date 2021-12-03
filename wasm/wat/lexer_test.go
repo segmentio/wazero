@@ -24,7 +24,12 @@ func TestLex(t *testing.T) {
 			input: " \t\r\n",
 		},
 		{
-			name:     "after white space characters",
+			name:     "after white space characters - EOL",
+			input:    " \t\n(",
+			expected: []*token{lParenAt(2, 1, 3)},
+		},
+		{
+			name:     "after white space characters - Windows EOL",
 			input:    " \t\r\n(",
 			expected: []*token{lParenAt(2, 1, 4)},
 		},
@@ -42,8 +47,42 @@ func TestLex(t *testing.T) {
 			expected: []*token{lParenAt(2, 1, 8)},
 		},
 		{
+			name:     "after line comment - Windows EOL",
+			input:    ";; TODO\r\n(",
+			expected: []*token{lParenAt(2, 1, 9)},
+		},
+		{
+			name:     "after redundant line comment",
+			input:    ";;;; TODO\n(",
+			expected: []*token{lParenAt(2, 1, 10)},
+		},
+		{
+			name:     "after line commenting out block comment",
+			input:    ";; TODO (; ;)\n(",
+			expected: []*token{lParenAt(2, 1, 14)},
+		},
+		{
+			name:     "after line commenting out open block comment",
+			input:    ";; TODO (;\n(",
+			expected: []*token{lParenAt(2, 1, 11)},
+		},
+		{
+			name:     "after line commenting out close block comment",
+			input:    ";; TODO ;)\n(",
+			expected: []*token{lParenAt(2, 1, 11)},
+		},
+		{
+			name:        "half line comment",
+			input:       "; TODO",
+			expectedErr: errors.New("1:1 unexpected character ;"),
+		},
+		{
 			name:  "only block comment - EOL before EOF",
 			input: "(; TODO ;)\n",
+		},
+		{
+			name:  "only block comment - Windows EOL before EOF",
+			input: "(; TODO ;)\r\n",
 		},
 		{
 			name:  "only block comment - EOF",
@@ -55,11 +94,15 @@ func TestLex(t *testing.T) {
 			expected: []*token{lParenAt(1, 11, 10)},
 		},
 		{
-			name:        "unbalanced block comment",
+			name:        "open block comment",
 			input:       "(; TODO",
 			expectedErr: errors.New("1:7 expected block comment end ';)'"),
 		},
-
+		{
+			name:        "close block comment",
+			input:       ";) TODO",
+			expectedErr: errors.New("1:1 unexpected character ;"),
+		},
 		{
 			name:  "only nested block comment - EOL before EOF",
 			input: "(; TODO (; (YOLO) ;) ;)\n",
@@ -72,6 +115,16 @@ func TestLex(t *testing.T) {
 			name:     "after nested block comment",
 			input:    "(; TODO (; (YOLO) ;) ;)(",
 			expected: []*token{lParenAt(1, 24, 23)},
+		},
+		{
+			name:     "after nested block comment - EOL",
+			input:    "(; TODO (; (YOLO) ;) ;)\n (",
+			expected: []*token{lParenAt(2, 2, 25)},
+		},
+		{
+			name:     "after nested block comment - Windows EOL",
+			input:    "(; TODO (; (YOLO) ;) ;)\r\n (",
+			expected: []*token{lParenAt(2, 2, 26)},
 		},
 		{
 			name:        "unbalanced nested block comment",
