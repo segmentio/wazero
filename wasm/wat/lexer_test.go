@@ -186,10 +186,10 @@ func BenchmarkLex(b *testing.B) {
 		name string
 		data []byte
 	}{
-		{"base", []byte("( )")},
-		{"whitespace chars", []byte("(\r\n\t )\n")},
-		{"unicode line comment", []byte("(\n;; брэд-ЛГТМ\n)\n")},
-		{"unicode block comment", []byte("( (; брэд-ЛГТМ ;)\n)\n")},
+		{"base", []byte("( )")}, // 3 bytes
+		{"whitespace chars", []byte("(                        \n)\n")}, // 28 bytes
+		{"unicode line comment", []byte("( ;; брэд-ЛГТМ   \n)\n")},     // 28 bytes
+		{"unicode block comment", []byte("( (; брэд-ЛГТМ ;)\n)\n")},    // 28 bytes
 	}
 	var noopParseToken parseToken = func(source []byte, tok tokenType, beginLine, beginCol, beginPos, endPos int) error {
 		return nil
