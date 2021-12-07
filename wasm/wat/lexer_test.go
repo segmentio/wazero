@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 )
@@ -186,7 +187,6 @@ func BenchmarkLex(b *testing.B) {
 		name string
 		data []byte
 	}{
-		{"base", []byte("( )")}, // 3 bytes
 		{"whitespace chars", []byte("(                        \n)\n")}, // 28 bytes
 		{"unicode line comment", []byte("( ;; брэд-ЛГТМ   \n)\n")},     // 28 bytes
 		{"unicode block comment", []byte("( (; брэд-ЛГТМ ;)\n)\n")},    // 28 bytes
@@ -195,6 +195,11 @@ func BenchmarkLex(b *testing.B) {
 		return nil
 	}
 	for _, bm := range benchmarks {
+		b.Run(bm.name+" vs utf8.ValidString", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				utf8.ValidString(string(bm.data))
+			}
+		})
 		b.Run(bm.name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				err := lex(bm.data, noopParseToken)
