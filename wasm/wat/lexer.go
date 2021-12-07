@@ -31,19 +31,20 @@ func lex(source []byte, parser parseToken) error {
 
 	for ; p < length; p = p + 1 {
 		b1 := source[p]
-		var b2 byte
-		if p+1 < length {
-			b2 = source[p+1]
-		}
 
-		if skipP := eolSkip(b1, b2); skipP > 0 {
-			p = p + skipP - 1
+		// The spec does not consider newlines apart from '\n'. Notably, a bare '\r' is not a newline here.
+		// See https://www.w3.org/TR/wasm-core-1/#text-comment
+		if b1 == '\n' {
 			line = line + 1
 			inLineComment = false
 			col = 0
 			continue // next line
 		}
-		col = col + 1
+
+		col = col + 1                              // the current character is at least one byte long
+		if b1 == ' ' || b1 == '\t' || b1 == '\r' { // fast path ASCII whitespace
+			continue // next whitespace
+		}
 
 		// check UTF-8 size as we may need to affect position without column!
 		size := utf8Size(b1)
@@ -52,7 +53,7 @@ func lex(source []byte, parser parseToken) error {
 			return fmt.Errorf("%d:%d unexpected character %x", line, col, b1)
 		case size == 1: // ASCII
 		default:
-			if !inLineComment || blockCommentLevel == 0 { // non-ASCII is only allowed in comments or strings
+			if !inLineComment && blockCommentLevel == 0 { // non-ASCII is only allowed in comments or strings
 				r, _ := utf8.DecodeRune(source[line:])
 				return fmt.Errorf("%d:%d expected an ASCII character, not %s", line, col, string(r))
 			}
@@ -61,8 +62,10 @@ func lex(source []byte, parser parseToken) error {
 		}
 
 		// From here on, we know b1 is ASCII
-		if b1 == ' ' || b1 == '\t' {
-			continue // next whitespace
+
+		var b2 byte
+		if p+1 < length {
+			b2 = source[p+1]
 		}
 
 		if b1 == '(' && b2 == ';' { // block comment
@@ -98,13 +101,13 @@ func lex(source []byte, parser parseToken) error {
 		}
 
 		// no more whitespace: start tokenization!
-		peekEOFOrWs := b2 == 0 || b2 == ' ' || b2 == '\t' || b2 == '\r' || b2 == '\n'
+
 		switch {
-		case b1 == '(' && peekEOFOrWs:
+		case b1 == '(' && endOfToken(b2):
 			if e := parser(source, tokenLParen, line, col, p, p); e != nil {
 				return e
 			}
-		case b1 == ')' && peekEOFOrWs:
+		case b1 == ')' && endOfToken(b2):
 			if e := parser(source, tokenRParen, line, col, p, p); e != nil {
 				return e
 			}
@@ -118,8 +121,13 @@ func lex(source []byte, parser parseToken) error {
 	return nil // EOF
 }
 
+// endOfToken looks past the current byte to determine if this is the end of a token
+func endOfToken(b2 byte) bool { // inlinable
+	return b2 == 0 || b2 == ' ' || b2 == '\t' || b2 == '\r' || b2 == '\n'
+}
+
 // utf8Size returns the UTF-8 size (cheaper than utf8.DecodeRune), or -1 if invalid
-func utf8Size(b1 byte) int {
+func utf8Size(b1 byte) int { // inlinable
 	switch {
 	case b1&0x80 == 0x00:
 		return 1 // 7-bit ASCII character
@@ -131,18 +139,4 @@ func utf8Size(b1 byte) int {
 		return 4
 	}
 	return -1
-}
-
-// eolSkip returns 1 or 2 if the given characters represent an end-of-line. The number returned is the position to skip.
-func eolSkip(b1, b2 byte) int {
-	if b1 == '\r' {
-		if b2 == '\n' {
-			return 2 // dos
-		}
-		return 1 // odd case where '\r' is standalone
-	}
-	if b1 == '\n' {
-		return 1 // unix
-	}
-	return 0
 }

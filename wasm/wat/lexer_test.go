@@ -20,6 +20,11 @@ func TestLex(t *testing.T) {
 			input: "",
 		},
 		{
+			name:     "only tokens",
+			input:    "( )",
+			expected: []*token{lParenAt(1, 1, 0), rParenAt(1, 3, 2)},
+		},
+		{
 			name:  "only white space characters",
 			input: " \t\r\n",
 		},
@@ -42,9 +47,18 @@ func TestLex(t *testing.T) {
 			input: ";; TODO",
 		},
 		{
+			name:  "only unicode line comment - EOF",
+			input: ";; брэд-ЛГТМ",
+		},
+		{
 			name:     "after line comment",
 			input:    ";; TODO\n(",
 			expected: []*token{lParenAt(2, 1, 8)},
+		},
+		{
+			name:     "after unicode line comment",
+			input:    ";; брэд-ЛГТМ\n(",
+			expected: []*token{lParenAt(2, 1, 21)},
 		},
 		{
 			name:     "after line comment - Windows EOL",
@@ -112,6 +126,10 @@ func TestLex(t *testing.T) {
 			input: "(; TODO (; (YOLO) ;) ;)",
 		},
 		{
+			name:  "only unicode block comment - EOF",
+			input: "(; брэд-ЛГТМ ;)",
+		},
+		{
 			name:     "after nested block comment",
 			input:    "(; TODO (; (YOLO) ;) ;)(",
 			expected: []*token{lParenAt(1, 24, 23)},
@@ -158,6 +176,31 @@ func TestLex(t *testing.T) {
 			} else {
 				require.NoError(t, e)
 				require.Equal(t, tc.expected, tokens)
+			}
+		})
+	}
+}
+
+func BenchmarkLex(b *testing.B) {
+	benchmarks := []struct {
+		name string
+		data []byte
+	}{
+		{"base", []byte("( )")},
+		{"whitespace chars", []byte("(\r\n\t )\n")},
+		{"unicode line comment", []byte("(\n;; брэд-ЛГТМ\n)\n")},
+		{"unicode block comment", []byte("( (; брэд-ЛГТМ ;)\n)\n")},
+	}
+	var noopParseToken parseToken = func(source []byte, tok tokenType, beginLine, beginCol, beginPos, endPos int) error {
+		return nil
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				err := lex(bm.data, noopParseToken)
+				if err != nil {
+					panic(err)
+				}
 			}
 		})
 	}
