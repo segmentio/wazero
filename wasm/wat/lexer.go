@@ -101,16 +101,51 @@ func lex(source []byte, parser parseToken) error {
 		}
 
 		// no more whitespace: start tokenization!
-		switch { // TODO: classify the first ASCII in a bitflag table
-		case b1 == '(':
+		switch b1 { // TODO: classify the first ASCII in a bitflag table
+		case '(':
 			if e := parser(source, tokenLParen, line, col, p, p); e != nil {
 				return e
 			}
-		case b1 == ')':
+		case ')':
 			if e := parser(source, tokenRParen, line, col, p, p); e != nil {
 				return e
 			}
-		case b1 >= 'a' && b1 <= 'z': // keyword
+		case '"': // string
+			p0 := p // fix the start position of the string at the open quote
+			col0 := col
+
+			for p+1 < length { // run until we get to another quote (TODO: handle escaping and restricted characters)
+				b1 = source[p+1]
+				if b1 == '"' {
+					break // end of this token, or dangling
+				}
+				p = p + 1
+				col = col + 1
+			}
+
+			if b1 == '"' {
+				p = p + 1 // move past the quote
+				col = col + 1
+			} else {
+				return fmt.Errorf("%d:%d expected end quote, not %s", line, col, string(b1))
+			}
+
+			// TODO: currently. this encloses the quotes and doesn't handle any special things like escaping
+			// We need to look at how others handle this, ex in errors is the position at or after the open quote?
+			if e := parser(source, tokenString, line, col0, p0, p+1); e != nil {
+				return e
+			}
+		default:
+			var tok tokenType
+			switch {
+			case b1 >= 'a' && b1 <= 'z':
+				tok = tokenKeyword
+			case b1 == '$':
+				tok = tokenReserved
+			default:
+				return fmt.Errorf("%d:%d unexpected character %s", line, col, string(b1))
+			}
+
 			p0 := p
 			col0 := col
 			for p+1 < length { // run until the end
@@ -121,11 +156,10 @@ func lex(source []byte, parser parseToken) error {
 				p = p + 1
 				col = col + 1
 			}
-			if e := parser(source, tokenKeyword, line, col0, p0, p+1); e != nil {
+
+			if e := parser(source, tok, line, col0, p0, p+1); e != nil {
 				return e
 			}
-		default:
-			return fmt.Errorf("%d:%d unexpected character %s", line, col, string(b1))
 		}
 	}
 	if blockCommentLevel > 0 {

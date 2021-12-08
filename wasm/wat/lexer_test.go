@@ -10,6 +10,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// exampleWat was at one time in the wasmtime-go README
+const exampleWat = `
+      (module
+        (import "" "hello" (func $hello))
+        (func (export "run")
+          (call $hello))
+      )
+    `
+
+func TestLex_Example(t *testing.T) {
+	tokens, e := lexTokens(exampleWat)
+	require.NoError(t, e)
+	require.Equal(t, []*token{
+		lParenAt(2, 7, 7),
+		keywordAt(2, 8, 8, "module"),
+		lParenAt(3, 9, 23),
+		keywordAt(3, 10, 24, "import"),
+		stringAt(3, 17, 31, `""`),
+		stringAt(3, 20, 34, `"hello"`),
+		lParenAt(3, 28, 42),
+		keywordAt(3, 29, 43, "func"),
+		reservedAt(3, 34, 48, "$hello"),
+		rParenAt(3, 40, 54),
+		rParenAt(3, 41, 55),
+		lParenAt(4, 9, 65),
+		keywordAt(4, 10, 66, "func"),
+		lParenAt(4, 15, 71),
+		keywordAt(4, 16, 72, "export"),
+		stringAt(4, 23, 79, `"run"`),
+		rParenAt(4, 28, 84),
+		lParenAt(5, 11, 96),
+		keywordAt(5, 12, 97, "call"),
+		reservedAt(5, 17, 102, "$hello"),
+		rParenAt(5, 23, 108),
+		rParenAt(5, 24, 109),
+		rParenAt(6, 7, 117),
+	}, tokens)
+}
+
 func TestLex(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -171,26 +210,22 @@ func TestLex(t *testing.T) {
 			input:    "( )",
 			expected: []*token{lParenAt(1, 1, 0), rParenAt(1, 3, 2)},
 		},
+		{
+			name:     "empty string",
+			input:    `""`,
+			expected: []*token{stringAt(1, 1, 0, `""`)},
+		},
+		{
+			name:     "string inside tokens with newline",
+			input:    `("\n")`,
+			expected: []*token{lParenAt(1, 1, 0), stringAt(1, 2, 1, `"\n"`), rParenAt(1, 6, 5)},
+		},
 	}
 
 	for _, tt := range tests {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
-			var tokens []*token
-			e := lex([]byte(tc.input), func(source []byte, tok tokenType, line, col, beginPos, endPos int) error {
-				switch tok {
-				case tokenLParen:
-					tokens = append(tokens, lParenAt(line, col, beginPos))
-					return nil
-				case tokenRParen:
-					tokens = append(tokens, rParenAt(line, col, beginPos))
-					return nil
-				case tokenKeyword:
-					tokens = append(tokens, keywordAt(line, col, beginPos, string(source[beginPos:endPos])))
-					return nil
-				}
-				return fmt.Errorf("%d:%d unsupported token: %s at position %d:%d", line, col, tok, beginPos, endPos)
-			})
+			tokens, e := lexTokens(tc.input)
 			if tc.expectedErr != nil {
 				require.Equal(t, e, tc.expectedErr)
 			} else {
@@ -201,11 +236,34 @@ func TestLex(t *testing.T) {
 	}
 }
 
+func lexTokens(input string) ([]*token, error) {
+	var tokens []*token
+	e := lex([]byte(input), func(source []byte, tok tokenType, line, col, beginPos, endPos int) (err error) {
+		switch tok {
+		case tokenLParen:
+			tokens = append(tokens, lParenAt(line, col, beginPos))
+		case tokenRParen:
+			tokens = append(tokens, rParenAt(line, col, beginPos))
+		case tokenKeyword:
+			tokens = append(tokens, keywordAt(line, col, beginPos, string(source[beginPos:endPos])))
+		case tokenReserved:
+			tokens = append(tokens, reservedAt(line, col, beginPos, string(source[beginPos:endPos])))
+		case tokenString:
+			tokens = append(tokens, stringAt(line, col, beginPos, string(source[beginPos:endPos])))
+		default:
+			err = fmt.Errorf("%d:%d unsupported token: %s at position %d:%d", line, col, tok, beginPos, endPos)
+		}
+		return
+	})
+	return tokens, e
+}
+
 func BenchmarkLex(b *testing.B) {
 	benchmarks := []struct {
 		name string
 		data []byte
 	}{
+		{"example", []byte(exampleWat)},
 		{"whitespace chars", []byte("(                        \nmodule)\n")}, // 34 bytes
 		{"unicode line comment", []byte("( ;; брэд-ЛГТМ   \nmodule)\n")},     // 28 bytes
 		{"unicode block comment", []byte("( (; брэд-ЛГТМ ;)\nmodule)\n")},    // 28 bytes
@@ -250,6 +308,14 @@ func rParenAt(line, col, pos int) *token {
 
 func keywordAt(line, col, pos int, value string) *token {
 	return &token{tokenKeyword, line, col, pos, value}
+}
+
+func reservedAt(line, col, pos int, value string) *token {
+	return &token{tokenReserved, line, col, pos, value}
+}
+
+func stringAt(line, col, pos int, value string) *token {
+	return &token{tokenString, line, col, pos, value}
 }
 
 type token struct {
