@@ -101,14 +101,27 @@ func lex(source []byte, parser parseToken) error {
 		}
 
 		// no more whitespace: start tokenization!
-
-		switch {
-		case b1 == '(' && endOfToken(b2):
+		switch { // TODO: classify the first ASCII in a bitflag table
+		case b1 == '(':
 			if e := parser(source, tokenLParen, line, col, p, p); e != nil {
 				return e
 			}
-		case b1 == ')' && endOfToken(b2):
+		case b1 == ')':
 			if e := parser(source, tokenRParen, line, col, p, p); e != nil {
+				return e
+			}
+		case b1 >= 'a' && b1 <= 'z': // keyword
+			p0 := p
+			col0 := col
+			for p+1 < length { // run until the end
+				b1 = source[p+1]
+				if asciiMap[b1] != asciiTypeId {
+					break // end of this token (or malformed, which the next loop will notice)
+				}
+				p = p + 1
+				col = col + 1
+			}
+			if e := parser(source, tokenKeyword, line, col0, p0, p+1); e != nil {
 				return e
 			}
 		default:
@@ -119,11 +132,6 @@ func lex(source []byte, parser parseToken) error {
 		return fmt.Errorf("%d:%d expected block comment end ';)'", line, col)
 	}
 	return nil // EOF
-}
-
-// endOfToken looks past the current byte to determine if this is the end of a token
-func endOfToken(b2 byte) bool { // inlinable
-	return b2 == 0 || b2 == ' ' || b2 == '\t' || b2 == '\r' || b2 == '\n'
 }
 
 // utf8Size returns the UTF-8 size (cheaper than utf8.DecodeRune), or -1 if invalid

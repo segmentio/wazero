@@ -6,6 +6,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/bytecodealliance/wasmtime-go"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,9 +22,24 @@ func TestLex(t *testing.T) {
 			input: "",
 		},
 		{
+			name:     "only parens",
+			input:    "()",
+			expected: []*token{lParenAt(1, 1, 0), rParenAt(1, 2, 1)},
+		},
+		{
+			name:     "shortest keywords",
+			input:    "a z",
+			expected: []*token{keywordAt(1, 1, 0, "a"), keywordAt(1, 3, 2, "z")},
+		},
+		{
+			name:     "shortest tokens - EOL",
+			input:    "(a)\n",
+			expected: []*token{lParenAt(1, 1, 0), keywordAt(1, 2, 1, "a"), rParenAt(1, 3, 2)},
+		},
+		{
 			name:     "only tokens",
-			input:    "( )",
-			expected: []*token{lParenAt(1, 1, 0), rParenAt(1, 3, 2)},
+			input:    "(module)",
+			expected: []*token{lParenAt(1, 1, 0), keywordAt(1, 2, 1, "module"), rParenAt(1, 8, 7)},
 		},
 		{
 			name:  "only white space characters",
@@ -161,16 +177,19 @@ func TestLex(t *testing.T) {
 		tc := tt
 		t.Run(tc.name, func(t *testing.T) {
 			var tokens []*token
-			e := lex([]byte(tc.input), func(source []byte, tok tokenType, line, col, pos, _ int) error {
+			e := lex([]byte(tc.input), func(source []byte, tok tokenType, line, col, beginPos, endPos int) error {
 				switch tok {
 				case tokenLParen:
-					tokens = append(tokens, lParenAt(line, col, pos))
+					tokens = append(tokens, lParenAt(line, col, beginPos))
 					return nil
 				case tokenRParen:
-					tokens = append(tokens, rParenAt(line, col, pos))
+					tokens = append(tokens, rParenAt(line, col, beginPos))
+					return nil
+				case tokenKeyword:
+					tokens = append(tokens, keywordAt(line, col, beginPos, string(source[beginPos:endPos])))
 					return nil
 				}
-				return fmt.Errorf("%d:%d unsupported token: %s at position %d", line, col, tok, pos)
+				return fmt.Errorf("%d:%d unsupported token: %s at position %d:%d", line, col, tok, beginPos, endPos)
 			})
 			if tc.expectedErr != nil {
 				require.Equal(t, e, tc.expectedErr)
@@ -187,9 +206,9 @@ func BenchmarkLex(b *testing.B) {
 		name string
 		data []byte
 	}{
-		{"whitespace chars", []byte("(                        \n)\n")}, // 28 bytes
-		{"unicode line comment", []byte("( ;; брэд-ЛГТМ   \n)\n")},     // 28 bytes
-		{"unicode block comment", []byte("( (; брэд-ЛГТМ ;)\n)\n")},    // 28 bytes
+		{"whitespace chars", []byte("(                        \nmodule)\n")}, // 34 bytes
+		{"unicode line comment", []byte("( ;; брэд-ЛГТМ   \nmodule)\n")},     // 28 bytes
+		{"unicode block comment", []byte("( (; брэд-ЛГТМ ;)\nmodule)\n")},    // 28 bytes
 	}
 	var noopParseToken parseToken = func(source []byte, tok tokenType, beginLine, beginCol, beginPos, endPos int) error {
 		return nil
@@ -198,6 +217,16 @@ func BenchmarkLex(b *testing.B) {
 		b.Run(bm.name+" vs utf8.ValidString", func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				utf8.ValidString(string(bm.data))
+			}
+		})
+		// Not a fair comparison as we are only lexing and not writing back %.wasm
+		// If possible, we should find a way to isolate only the lexing C functions.
+		b.Run(bm.name+" vs wasmtime.Wat2Wasm", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_, err := wasmtime.Wat2Wasm(string(bm.data))
+				if err != nil {
+					panic(err)
+				}
 			}
 		})
 		b.Run(bm.name, func(b *testing.B) {
@@ -217,6 +246,10 @@ func lParenAt(line, col, pos int) *token {
 
 func rParenAt(line, col, pos int) *token {
 	return &token{tokenRParen, line, col, pos, ""}
+}
+
+func keywordAt(line, col, pos int, value string) *token {
+	return &token{tokenKeyword, line, col, pos, value}
 }
 
 type token struct {

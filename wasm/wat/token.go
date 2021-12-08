@@ -5,7 +5,7 @@ package wat
 type tokenType byte
 
 const (
-	// tokenKeyword is a sequence of asciiTypeId characters prefixed by a lowercase letter.
+	// tokenKeyword is a potentially empty sequence of asciiTypeId characters prefixed by a lowercase letter.
 	//
 	// For example, in the below, 'local.get' 'i32.const' and 'i32.lt_s' are keywords:
 	//		local.get $y
@@ -105,4 +105,94 @@ var tokenNames = []string{
 // String returns the string name of this token.
 func (t tokenType) String() string {
 	return tokenNames[t]
+}
+
+// asciiType helps identify a meaningful ASCII character in a UTF-8 string.
+type asciiType byte
+
+const (
+	asciiTypeUnknown asciiType = iota
+	// asciiTypeId is a printable ASCII character that does not contain a space, quotation mark, comma, semicolon, or bracket.
+	// See https://www.w3.org/TR/wasm-core-1/#text-idchar
+	asciiTypeId
+	// wsChar is a space, tab, newline or carriage return
+	// See https://www.w3.org/TR/wasm-core-1/#text-space
+	asciiTypeWs
+)
+
+var asciiMap = buildAsciiMap()
+
+func buildAsciiMap() (result [256]asciiType) {
+	for i := 0; i < 128; i++ {
+		result[i] = getAsciiType(byte(i))
+	}
+	return
+}
+
+func getAsciiType(ch byte) asciiType {
+	switch ch {
+	case ' ':
+		fallthrough
+	case '\t':
+		fallthrough
+	case '\r':
+		fallthrough
+	case '\n':
+		return asciiTypeWs
+	case '!':
+		fallthrough
+	case '#':
+		fallthrough
+	case '$':
+		fallthrough
+	case '%':
+		fallthrough
+	case '&':
+		fallthrough
+	case '\'':
+		fallthrough
+	case '*':
+		fallthrough
+	case '+':
+		fallthrough
+	case '-':
+		fallthrough
+	case '.':
+		fallthrough
+	case '/':
+		fallthrough
+	case ':':
+		fallthrough
+	case '<':
+		fallthrough
+	case '=':
+		fallthrough
+	case '>':
+		fallthrough
+	case '?':
+		fallthrough
+	case '@':
+		fallthrough
+	case '\\':
+		fallthrough
+	case '^':
+		fallthrough
+	case '_':
+		fallthrough
+	case '`':
+		fallthrough
+	case '|':
+		fallthrough
+	case '~':
+		return asciiTypeId
+	}
+	switch {
+	case ch >= '0' && ch <= '9':
+		fallthrough
+	case ch >= 'a' && ch <= 'z':
+		fallthrough
+	case ch >= 'A' && ch <= 'Z':
+		return asciiTypeId
+	}
+	return asciiTypeUnknown
 }
