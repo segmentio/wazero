@@ -91,15 +91,15 @@ const (
 
 // tokenNames is index-coordinated with tokenType
 var tokenNames = []string{
-	"keyword",
-	"uN",
-	"sN",
-	"fN",
-	"string",
-	"id",
-	"(",
-	")",
-	"reserved",
+	"tokenKeyword",
+	"tokenUN",
+	"tokenSN",
+	"tokenFN",
+	"tokenString",
+	"tokenId",
+	"tokenLParen",
+	"tokenRParen",
+	"tokenReserved",
 }
 
 // String returns the string name of this token.

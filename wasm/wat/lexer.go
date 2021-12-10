@@ -101,16 +101,32 @@ func lex(source []byte, parser parseToken) error {
 		}
 
 		// no more whitespace: start tokenization!
-		switch b1 { // TODO: classify the first ASCII in a bitflag table
-		case '(':
-			if e := parser(source, tokenLParen, line, col, p, p); e != nil {
+		switch { // TODO: classify the first ASCII in a bitflag table
+		case b1 == '(':
+			if e := parser(source, tokenLParen, line, col, p, p+1); e != nil {
 				return e
 			}
-		case ')':
-			if e := parser(source, tokenRParen, line, col, p, p); e != nil {
+		case b1 == ')':
+			if e := parser(source, tokenRParen, line, col, p, p+1); e != nil {
 				return e
 			}
-		case '"': // string
+		case b1 >= '0' && b1 <= '9': // TODO: do hex
+			p0 := p
+			col0 := col
+			for p+1 < length { // run until the end
+				b1 = source[p+1]
+				if (b1 >= '0' && b1 <= '9') || b1 == '_' { // TODO change asciiMap to use bit flags
+					p = p + 1
+					col = col + 1
+				} else {
+					break // end of this token (or malformed, which the next loop will notice)
+				}
+			}
+
+			if e := parser(source, tokenUN, line, col0, p0, p+1); e != nil {
+				return e
+			}
+		case b1 == '"': // string
 			p0 := p // fix the start position of the string at the open quote
 			col0 := col
 
